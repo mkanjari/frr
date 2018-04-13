@@ -39,6 +39,9 @@
 #define ETH_ALEN 6
 #endif
 
+#define ESI_BYTES 10
+#define ESI_STR_LEN (3* ESI_BYTES)
+
 #define ETHER_ADDR_STRLEN (3*ETH_ALEN)
 /*
  * there isn't a portable ethernet address type. We define our
@@ -61,32 +64,32 @@ typedef struct esi_t_ {
 }esi_t;
 
 struct evpn_ead_addr {
-	esi_t esi;
 	uint32_t eth_tag;
+	esi_t esi;
 };
 
 struct evpn_macip_addr {
-	uint32_t eth_tag;
 	uint8_t ip_prefix_length;
 	struct ethaddr mac;
+	uint32_t eth_tag;
 	struct ipaddr ip;
 };
 
 struct evpn_imet_addr {
-	uint32_t eth_tag;
 	uint8_t ip_prefix_length;
+	uint32_t eth_tag;
 	struct ipaddr ip;
 };
 
 struct evpn_es_addr {
-	esi_t esi;
 	uint8_t ip_prefix_length;
 	struct ipaddr ip;
+	esi_t esi;
 };
 
 struct evpn_prefix_addr {
-	uint32_t eth_tag;
 	uint8_t ip_prefix_length;
+	uint32_t eth_tag;
 	struct ipaddr ip;
 };
 
@@ -213,6 +216,8 @@ static inline int is_evpn_prefix_ipaddr_none(const struct prefix_evpn *evp)
 		return IS_IPADDR_NONE(&(evp)->prefix.macip_addr.ip);
 	if (evp->prefix.route_type == 3)
 		return IS_IPADDR_NONE(&(evp)->prefix.imet_addr.ip);
+	if (evp->prefix.route_type == 4)
+		return IS_IPADDR_NONE(&(evp)->prefix.es_addr.ip);
 	if (evp->prefix.route_type == 5)
 		return IS_IPADDR_NONE(&(evp)->prefix.prefix_addr.ip);
 	return 0;
@@ -224,6 +229,8 @@ static inline int is_evpn_prefix_ipaddr_v4(const struct prefix_evpn *evp)
 		return IS_IPADDR_V4(&(evp)->prefix.macip_addr.ip);
 	if (evp->prefix.route_type == 3)
 		return IS_IPADDR_V4(&(evp)->prefix.imet_addr.ip);
+	if (evp->prefix.route_type == 4)
+		return IS_IPADDR_V4(&(evp)->prefix.es_addr.ip);
 	if (evp->prefix.route_type == 5)
 		return IS_IPADDR_V4(&(evp)->prefix.prefix_addr.ip);
 	return 0;
@@ -235,6 +242,8 @@ static inline int is_evpn_prefix_ipaddr_v6(const struct prefix_evpn *evp)
 		return IS_IPADDR_V6(&(evp)->prefix.macip_addr.ip);
 	if (evp->prefix.route_type == 3)
 		return IS_IPADDR_V6(&(evp)->prefix.imet_addr.ip);
+	if (evp->prefix.route_type == 4)
+		return IS_IPADDR_V6(&(evp)->prefix.es_addr.ip);
 	if (evp->prefix.route_type == 5)
 		return IS_IPADDR_V6(&(evp)->prefix.prefix_addr.ip);
 	return 0;
@@ -432,6 +441,11 @@ extern char *prefix_mac2str(const struct ethaddr *mac, char *buf, int size);
 
 extern unsigned prefix_hash_key(void *pp);
 
+extern int str_to_esi(const char *str, esi_t *esi);
+extern char *esi_to_str(const esi_t *esi, char *buf, int size);
+extern void prefix_hexdump(const struct prefix *p);
+extern void prefix_evpn_hexdump(const struct prefix_evpn *p);
+
 static inline int ipv6_martian(struct in6_addr *addr)
 {
 	struct in6_addr localhost_addr;
@@ -482,5 +496,4 @@ static inline int is_host_route(struct prefix *p)
 		return (p->prefixlen == IPV6_MAX_BITLEN);
 	return 0;
 }
-
 #endif /* _ZEBRA_PREFIX_H */

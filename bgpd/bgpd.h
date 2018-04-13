@@ -482,6 +482,9 @@ struct bgp {
 #define BGP_VPN_POLICY_TOVPN_NEXTHOP_SET       0x00000008
 	} vpn_policy[AFI_MAX];
 
+	/* local esi hash table */
+	struct hash *esihash;
+
 	QOBJ_FIELDS
 };
 DECLARE_QOBJ_TYPE(bgp)
