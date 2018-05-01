@@ -414,11 +414,13 @@ static void display_l3vni(struct vty *vty, struct bgp *bgp_vrf,
 static void display_es(struct vty *vty, struct evpnes *es, json_object *json)
 {
 	struct in_addr *vtep;
+	struct bgpevpn *vpn;
 	char buf[ESI_STR_LEN];
 	char buf1[RD_ADDRSTRLEN];
 	char buf2[INET6_ADDRSTRLEN];
 	struct listnode *node = NULL;
 	json_object *json_vteps = NULL;
+	json_object *json_vpns = NULL;
 
 	if (json) {
 		json_vteps = json_object_new_array();
@@ -435,6 +437,12 @@ static void display_es(struct vty *vty, struct evpnes *es, json_object *json)
 						      json_object_new_string(inet_ntoa(*vtep)));
 		}
 		json_object_object_add(json, "vteps", json_vteps);
+		if (es->vpn_list) {
+			for (ALL_LIST_ELEMENTS_RO(es->vpn_list, node, vpn))
+				json_object_array_add(json_vpns,
+						      json_object_new_int64(vpn->vni));
+		}
+		json_object_object_add(json, "vpns", json_vpns);
 	} else {
 		vty_out(vty, "ESI: %s\n",
 			esi_to_str(&es->esi, buf, sizeof(buf)));
@@ -446,6 +454,11 @@ static void display_es(struct vty *vty, struct evpnes *es, json_object *json)
 			vty_out(vty, "  VTEP List:\n");
 			for (ALL_LIST_ELEMENTS_RO(es->vtep_list, node, vtep))
 				vty_out(vty,"    %s\n", inet_ntoa(*vtep));
+		}
+		if (es->vpn_list) {
+			vty_out(vty, "  VPN List:\n");
+			for (ALL_LIST_ELEMENTS_RO(es->vpn_list, node, vpn))
+				vty_out(vty,"    %u ", vpn->vni);
 		}
 	}
 }
@@ -828,9 +841,11 @@ static void show_es_entry(struct hash_backet *backet, void *args[])
 	char buf1[RD_ADDRSTRLEN];
 	char buf2[INET6_ADDRSTRLEN];
 	struct in_addr *vtep = NULL;
+	struct bgpevpn *vpn;
 	struct vty *vty = args[0];
 	json_object *json = args[1];
 	json_object *json_vteps = NULL;
+	json_object *json_vpns = NULL;
 	struct listnode *node = NULL;
 	struct evpnes *es = (struct evpnes *)backet->data;
 
@@ -852,14 +867,21 @@ static void show_es_entry(struct hash_backet *backet, void *args[])
 							inet_ntoa(*vtep)));
 		}
 		json_object_object_add(json, "vteps", json_vteps);
+		if (es->vpn_list) {
+			for (ALL_LIST_ELEMENTS_RO(es->vpn_list, node, vpn))
+				json_object_array_add(json_vpns,
+						json_object_new_int64(vpn->vni));
+		}
+		json_object_object_add(json, "vpns", json_vpns);
 	} else {
-		vty_out(vty, "%-30s %-6s %-21s %-15s %-6d\n",
+		vty_out(vty, "%-30s %-6s %-21s %-15s %-6d %-6d\n",
 			esi_to_str(&es->esi, buf, sizeof(buf)),
 			is_es_local(es) ? "Local" : "Remote",
 			prefix_rd2str(&es->prd, buf1, sizeof(buf1)),
 			ipaddr2str(&es->originator_ip, buf2,
 				   sizeof(buf2)),
-			es->vtep_list ? listcount(es->vtep_list) : 0);
+			es->vtep_list ? listcount(es->vtep_list) : 0,
+			es->vpn_list ? listcount(es->vpn_list) : 0);
 	}
 }
 
@@ -2509,8 +2531,8 @@ static void evpn_show_all_es(struct vty *vty, struct bgp *bgp, json_object *json
 	void *args[2];
 
 	if (!json)
-		vty_out(vty, "%-30s %-6s %-21s %-15s %-6s\n",
-			"ESI", "Type", "RD", "Originator-IP", "#VTEPs");
+		vty_out(vty, "%-30s %-6s %-21s %-15s %-6s %-6s\n",
+			"ESI", "Type", "RD", "Originator-IP", "#VTEPs", "#VPNs");
 
 	/* print all ESs */
 	args[0] = vty;

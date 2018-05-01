@@ -27,6 +27,7 @@
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_ecommunity.h"
+#include "bgpd/bgp_label.h"
 
 #define RT_ADDRSTRLEN 28
 
@@ -35,7 +36,7 @@
 
 /* EVPN route types. */
 typedef enum {
-	BGP_EVPN_AD_ROUTE = 1,    /* Ethernet Auto-Discovery (A-D) route */
+	BGP_EVPN_EAD_ROUTE = 1,    /* Ethernet Auto-Discovery (A-D) route */
 	BGP_EVPN_MAC_IP_ROUTE,    /* MAC/IP Advertisement route */
 	BGP_EVPN_IMET_ROUTE,      /* Inclusive Multicast Ethernet Tag route */
 	BGP_EVPN_ES_ROUTE,	/* Ethernet Segment route */
@@ -116,8 +117,14 @@ struct evpnes {
 	/* originator ip address  */
 	struct ipaddr originator_ip;
 
+	/* ESI label - used for split horizon */
+	mpls_label_t esi_label;
+
 	/* list of VTEPs in the same site */
 	struct list *vtep_list;
+
+	/* list of all VNIs/VPNs which are active on the ES */
+	struct list *vpn_list;
 
 	/* Route table for EVPN routes for
 	 * this ESI. - type4 routes */
@@ -268,6 +275,15 @@ static inline int is_vni_param_configured(struct bgpevpn *vpn)
 		|| is_export_rt_configured(vpn));
 }
 
+static inline void encode_esi_label_extcomm(struct ecommunity_val *eval,
+					    mpls_label_t *label)
+{
+	memset(eval, 0, sizeof(struct ecommunity_val));
+	eval->val[0] = ECOMMUNITY_ENCODE_EVPN;
+	eval->val[1] = ECOMMUNITY_EVPN_SUBTYPE_ESI_LABEL;
+	memcpy(&eval->val[5], label, BGP_LABEL_BYTES);
+}
+
 static inline void encode_es_rt_extcomm(struct ecommunity_val *eval,
 					struct ethaddr *mac)
 {
@@ -358,6 +374,18 @@ static inline void ip_prefix_from_evpn_prefix(struct prefix_evpn *evp,
 	else if(evp->prefix.route_type == BGP_EVPN_IP_PREFIX_ROUTE)
 		ip_prefix_from_type5_prefix(evp, ip);
 	return;
+}
+
+static inline void build_evpn_type1_prefix(struct prefix_evpn *p,
+					   esi_t *esi,
+					   vni_t vni)
+{
+	memset(p, 0, sizeof(struct prefix_evpn));
+	p->family = AF_EVPN;
+	p->prefixlen = EVPN_ROUTE_PREFIXLEN;
+	p->prefix.route_type = BGP_EVPN_EAD_ROUTE;
+	p->prefix.ead_addr.eth_tag = MAX_ET;
+	memcpy(&p->prefix.ead_addr.esi, esi, sizeof(esi_t));
 }
 
 static inline void build_evpn_type2_prefix(struct prefix_evpn *p,
